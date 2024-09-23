@@ -110,19 +110,56 @@ def build_scaling_rotation(s, r):
     return L
 
 def safe_state(silent):
+    """
+    Redirects the standard output to a custom file-like object that adds a timestamp to each line of output.
+    通过重写两个sys.stdout方法来实现安静模型，并设置一些随机化的种子
+
+    Args:
+        silent (bool): If True, suppresses the output. If False, adds a timestamp to each line of output.
+
+    Returns:
+        None
+    """
     old_f = sys.stdout
     class F:
+        """
+        A class that provides a custom write and flush method.
+
+        Args:
+            silent (bool): If True, the write method will not output anything.(就什么都不写)
+
+        Attributes:
+            silent (bool): Indicates whether the write method should output anything.
+
+        Methods:
+            write(x): Writes the given string to the output, with an optional timestamp.
+            flush(): Flushes the output buffer.
+
+        """
+
         def __init__(self, silent):
             self.silent = silent
 
         def write(self, x):
+            """
+            Writes the given string to the output, with an optional timestamp.
+
+            Args:
+                x (str): The string to be written.
+
+            """
             if not self.silent:
                 if x.endswith("\n"):
+                    # write方法会在每次输出的字符串末尾添加一个时间戳，然后调用old_f.write来输出这个字符串
                     old_f.write(x.replace("\n", " [{}]\n".format(str(datetime.now().strftime("%d/%m %H:%M:%S")))))
                 else:
                     old_f.write(x)
 
         def flush(self):
+            """
+            Flushes the output buffer.
+
+            """
             old_f.flush()
 
     sys.stdout = F(silent)

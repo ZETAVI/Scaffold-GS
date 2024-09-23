@@ -11,4 +11,6 @@
 
 #include <torch/extension.h>
 
+// 它定义了一个函数原型
+// 这个函数接受一个 torch::Tensor 类型的参数 points，并返回一个 torch::Tensor 类型的结果
 torch::Tensor distCUDA2(const torch::Tensor& points);

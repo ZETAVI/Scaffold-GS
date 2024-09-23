@@ -9,6 +9,7 @@ from torch import Tensor, nn
 
 class FieldComponent(nn.Module):
     """Field modules that can be combined to store and compute the fields.
+    基于nn.Module的自定义抽象类，便于根据自己的需求来扩展一些定制化操作，比如添加不同类型的初始化方法
 
     Args:
         in_dim: Input dimension to module.
@@ -52,6 +53,7 @@ class FieldComponent(nn.Module):
   
 class Embedding(FieldComponent):
     """Index into embeddings.
+    Embedding类可以根据自己的需求对nn.Embedding进行定制化操作，比如添加不同类型的初始化方法
     # TODO: add different types of initializations
 
     Args:

@@ -25,8 +25,58 @@ from scene.embedding import Embedding
 
     
 class GaussianModel:
+    """
+    A class representing All Gaussians in a specific scene.
+
+    This class encapsulates the functionality of a Gaussian Model, which is used for modeling
+    and rendering 3D scenes. It contains methods for setting up the model(初始化), training the model(训练优化),
+    capturing and restoring the model's state(加载和保存高斯点状态), and accessing various properties of the model.
+
+    Attributes:
+        feat_dim (int): The dimension of the feature space.(特征编码的长度)
+        n_offsets (int): The number of offsets.(锚点附带的高斯点数量)
+        voxel_size (float): The voxel size.
+        update_depth (int): The update depth.
+        update_init_factor (int): The update initialization factor.
+        update_hierachy_factor (int): The update hierarchy factor.
+        use_feat_bank (bool): Flag indicating whether to use a feature bank.(不同分辨率的特征编码)
+        appearance_dim (int): The dimension of the appearance vector.(未知,好像一直是-1)
+        embedding_appearance (Embedding): The embedding appearance.(未知,不知与feat_dim有什么区别)
+        ratio (int): The ratio.
+        add_opacity_dist (bool): Flag indicating whether to add opacity distribution.
+        add_cov_dist (bool): Flag indicating whether to add covariance distribution.
+        add_color_dist (bool): Flag indicating whether to add color distribution.
+        以下都是一些需要网络学习的参数
+        _anchor (torch.Tensor): The anchor tensor.
+        _offset (torch.Tensor): The offset tensor.
+        _anchor_feat (torch.Tensor): The anchor feature tensor.
+        opacity_accum (torch.Tensor): The opacity accumulation tensor.
+        _scaling (torch.Tensor): The scaling tensor.
+        _rotation (torch.Tensor): The rotation tensor.
+        _opacity (torch.Tensor): The opacity tensor.
+        max_radii2D (torch.Tensor): The maximum radii 2D tensor.
+        offset_gradient_accum (torch.Tensor): The offset gradient accumulation tensor.
+        offset_denom (torch.Tensor): The offset denominator tensor.
+        anchor_demon (torch.Tensor): The anchor denominator tensor.
+        optimizer (Optimizer): The optimizer.(具体的优化器)
+        percent_dense (int): The percentage of density.
+        spatial_lr_scale (int): The spatial learning rate scale.
+        mlp_feature_bank (nn.Sequential): The feature bank MLP.(混合三种分辨率下的特征编码的MLP)
+        mlp_opacity(cov\color) (nn.Sequential): The opacity MLP.(不透明度MLP\协方差\颜色)
+    """
 
     def setup_functions(self):
+        """
+        配置不同MLP的激活函数
+        Configures the activation functions for different components of the Gaussian model.
+
+        This method sets up the activation functions for scaling, covariance, opacity, and rotation
+        in the Gaussian model. It also defines a helper function for building covariance matrices
+        from scaling and rotation.（解构出旋转的特征向量）
+
+        Returns:
+            None
+        """
         def build_covariance_from_scaling_rotation(scaling, scaling_modifier, rotation):
             L = build_scaling_rotation(scaling_modifier * scaling, rotation)
             actual_covariance = L @ L.transpose(1, 2)
@@ -36,11 +86,13 @@ class GaussianModel:
         self.scaling_activation = torch.exp
         self.scaling_inverse_activation = torch.log
 
+        # 分解出旋转的特征向量
         self.covariance_activation = build_covariance_from_scaling_rotation
 
         self.opacity_activation = torch.sigmoid
         self.inverse_opacity_activation = inverse_sigmoid
 
+        # todo 并不知道这里的rotation激活是做什么，并没有rotation吧
         self.rotation_activation = torch.nn.functional.normalize
 
 
@@ -62,22 +114,24 @@ class GaussianModel:
         self.feat_dim = feat_dim
         self.n_offsets = n_offsets
         self.voxel_size = voxel_size
-        self.update_depth = update_depth
-        self.update_init_factor = update_init_factor
-        self.update_hierachy_factor = update_hierachy_factor
+        self.update_depth = update_depth    # todo 未知
+        self.update_init_factor = update_init_factor    # todo 未知
+        self.update_hierachy_factor = update_hierachy_factor   # todo 未知
         self.use_feat_bank = use_feat_bank
 
-        self.appearance_dim = appearance_dim
-        self.embedding_appearance = None
-        self.ratio = ratio
+        self.appearance_dim = appearance_dim    # todo 未知
+        self.embedding_appearance = None    # todo 未知
+        self.ratio = ratio  # 用来控制从pcd中初始化高斯点的比率,不是全部点云都转换为高斯点
         self.add_opacity_dist = add_opacity_dist
         self.add_cov_dist = add_cov_dist
         self.add_color_dist = add_color_dist
 
+        # 这些带有_的变量都是需要网络学习的参数
         self._anchor = torch.empty(0)
         self._offset = torch.empty(0)
         self._anchor_feat = torch.empty(0)
         
+        # todo 未知
         self.opacity_accum = torch.empty(0)
 
         self._scaling = torch.empty(0)
@@ -92,18 +146,23 @@ class GaussianModel:
                 
         self.optimizer = None
         self.percent_dense = 0
-        self.spatial_lr_scale = 0
+        self.spatial_lr_scale = 0   # 初始化空间学习率缩放为0
         self.setup_functions()
 
         if self.use_feat_bank:
+            # 用于混合三种分辨率下的特征编码的MLP,输入是三维的view-direction和一维的distance,输出是三个混合权重
             self.mlp_feature_bank = nn.Sequential(
                 nn.Linear(3+1, feat_dim),
                 nn.ReLU(True),
                 nn.Linear(feat_dim, 3),
+                # dim 使得输出向量的每个元素都在0到1之间
                 nn.Softmax(dim=1)
             ).cuda()
 
+        # 这里针对大场景视距变化较大，多一个视距信息（一般对于室内场景不启用）
+        # 这里视距信息对不透明度和颜色解码做了区分,分别由add_opacity_dist和add_color_dist和add_cov_dist控制
         self.opacity_dist_dim = 1 if self.add_opacity_dist else 0
+        # MLP结构为：36->32->ReLU->n_offsets(生成高斯点的数量)->Tanh激活
         self.mlp_opacity = nn.Sequential(
             nn.Linear(feat_dim+3+self.opacity_dist_dim, feat_dim),
             nn.ReLU(True),
@@ -111,15 +170,18 @@ class GaussianModel:
             nn.Tanh()
         ).cuda()
 
+        # 建模高斯点的协方差 旋转4和缩放3 后续还要做处理
         self.add_cov_dist = add_cov_dist
         self.cov_dist_dim = 1 if self.add_cov_dist else 0
+        # MLP结构为: 36->32->ReLU->7*n_offsets(将旋转4和缩放3结合)->后续分别激活处理
         self.mlp_cov = nn.Sequential(
             nn.Linear(feat_dim+3+self.cov_dist_dim, feat_dim),
             nn.ReLU(True),
             nn.Linear(feat_dim, 7*self.n_offsets),
         ).cuda()
 
-        self.color_dist_dim = 1 if self.add_color_dist else 0
+        # ? 负责颜色 不知道这里为什么加上appearance_dim
+        self.color_dist_dim = 1 if self.add_color_dist else 0   # 解码颜色时是否考虑视距信息
         self.mlp_color = nn.Sequential(
             nn.Linear(feat_dim+3+self.color_dist_dim+self.appearance_dim, feat_dim),
             nn.ReLU(True),
@@ -129,15 +191,33 @@ class GaussianModel:
 
 
     def eval(self):
-        self.mlp_opacity.eval()
-        self.mlp_cov.eval()
-        self.mlp_color.eval()
-        if self.appearance_dim > 0:
-            self.embedding_appearance.eval()
-        if self.use_feat_bank:
-            self.mlp_feature_bank.eval()
+            """
+            设置为评估模式:
+            Puts the model in evaluation mode by setting all the necessary components to evaluation mode, 
+            which disables dropout and batch normalization layers.
+            Dropout层会随机将输入张量的一部分元素设置为0，以防止过拟合。但在评估模式下，Dropout层不会改变输入，因为在评估模型时我们希望使用完整的模型，而不是随机丢弃一部分的模型。
+            
+            """
+            self.mlp_opacity.eval()
+            self.mlp_cov.eval()
+            self.mlp_color.eval()
+            if self.appearance_dim > 0:
+                self.embedding_appearance.eval()
+            if self.use_feat_bank:
+                self.mlp_feature_bank.eval()
 
     def train(self):
+        """
+        设置为训练模式
+        Trains the model by updating the weights of the MLPs and embeddings.
+
+        This method trains the opacity, covariance, color, and appearance MLPs by calling their respective `train` methods.
+        If the `appearance_dim` is greater than 0, the embedding appearance is also trained.
+        If the `use_feat_bank` flag is set, the feature bank MLP is trained as well.
+
+        Returns:
+            None
+        """
         self.mlp_opacity.train()
         self.mlp_cov.train()
         self.mlp_color.train()
@@ -147,6 +227,11 @@ class GaussianModel:
             self.mlp_feature_bank.train()
 
     def capture(self):
+        """获取模型的所有状态信息
+
+        Returns:
+            Tuple: A tuple containing the following information
+        """
         return (
             self._anchor,
             self._offset,
@@ -161,29 +246,45 @@ class GaussianModel:
         )
     
     def restore(self, model_args, training_args):
-        (self.active_sh_degree, 
-        self._anchor, 
-        self._offset,
-        self._local,
-        self._scaling, 
-        self._rotation, 
-        self._opacity,
-        self.max_radii2D, 
-        denom,
-        opt_dict, 
-        self.spatial_lr_scale) = model_args
-        self.training_setup(training_args)
-        self.denom = denom
-        self.optimizer.load_state_dict(opt_dict)
+            """
+            Restores恢复 the model's state from the given arguments.
 
+            Args:
+                model_args (tuple): A tuple containing the model arguments.
+                training_args (object): The training arguments.
+
+            Returns:
+                None
+            """
+            (self.active_sh_degree, 
+            self._anchor, 
+            self._offset,
+            self._local,
+            self._scaling, 
+            self._rotation, 
+            self._opacity,
+            self.max_radii2D, 
+            denom,
+            opt_dict, 
+            self.spatial_lr_scale) = model_args
+            self.training_setup(training_args)
+            self.denom = denom
+            self.optimizer.load_state_dict(opt_dict)
+
+    # ? 疑问：为什么需要将训练相机个数编码成appearance_dim维度的向量
+    # 这里好像不是GLO的思想（因为GLO是每张图片一个embedding，而这里对于整个Gaussian就只有一个embedding）
     def set_appearance(self, num_cameras):
+        # 好像这个appearance_dim一直为0
         if self.appearance_dim > 0:
             self.embedding_appearance = Embedding(num_cameras, self.appearance_dim).cuda()
 
     @property
     def get_appearance(self):
         return self.embedding_appearance
-
+    
+    # * @property 装饰器可以将一个方法转换为属性，使得我们可以像访问属性一样来调用这个方法，而不需要在调用时添加括号
+    # 这种方式的好处是，你可以在访问属性的同时执行一些额外的操作，例如计算或者被访问前的预处理验证等。在这里就需要做激活的计算
+    # @property 装饰器创建的属性默认是只读的。如果你想要创建一个可写的属性，你需要使用 @property 的配套装饰器 @<property_name>.setter
     @property
     def get_scaling(self):
         return 1.0*self.scaling_activation(self._scaling)
@@ -223,21 +324,57 @@ class GaussianModel:
     def get_opacity(self):
         return self.opacity_activation(self._opacity)
     
+    # render的时候使用
     def get_covariance(self, scaling_modifier = 1):
         return self.covariance_activation(self.get_scaling, scaling_modifier, self._rotation)
     
     def voxelize_sample(self, data=None, voxel_size=0.01):
+        """
+        一开始对点云体素化处理，计算出锚点的位置
+        Voxelize a sample by rounding the data points to the nearest voxel coordinates.
+
+        Args:
+            data (ndarray): The input data points.
+            voxel_size (float): The size of each voxel.
+
+        Returns:
+            ndarray: The voxelized data points.
+
+        """
+        # 先打乱点云数据
         np.random.shuffle(data)
+        # 再四舍五入迁移到最近的体素坐标上，然后使用unique去重，最后乘上体素大小还原回原来的尺度中
+        # * np.unique()函数是去除数组中的重复数字，并进行排序之后输出
+        # 在np.unique()函数中，axis参数用于指定沿哪一个轴来对比，在np中axis=0指的是最外一层[]，所以按照axis=0(相当于arr[0]=arr[0,:],往后遍历)来取就能实现按行取元素排序去重的效果
+        # 同理，axis=1，即等于arr[:,0]\arr[:,1]....，按列取元素排序去重
+        # 综上，这也是np数组中axis（轴）的规律，一般用于取元素，分组，axis=0是最外层[]中取元素
+        # *无论是np还是tensor，设定axis=i的含义可以理解为沿着第i个下标变化的方向进行分组计算操作。也即是将矩阵进行分组，然后再操作
         data = np.unique(np.round(data/voxel_size), axis=0)*voxel_size
         
         return data
 
     def create_from_pcd(self, pcd : BasicPointCloud, spatial_lr_scale : float):
+        """
+        从pcd(pointcloud data)文件中创建初始化的高斯点
+        Create a Gaussian model from a point cloud.
+
+        Args:
+            pcd (BasicPointCloud): The input point cloud.
+            spatial_lr_scale (float): 空间学习率尺度,由训练集中场景半径决定(在3DGS中有讨论,由于colmap的特性对于不同的场景最终的场景半径都控制在5附近)
+
+        Returns:
+            None
+        """
+        # todo 看看spatial_lr_scale对于不同场景是不是都在5附近
         self.spatial_lr_scale = spatial_lr_scale
+        # 这里ratio可以做到跳点采样初始化,以控制高斯点数量
         points = pcd.points[::self.ratio]
 
         if self.voxel_size <= 0:
+            # todo 看这里的points是结构,如何tensor化
+            # 将二维的points数组转换为浮点形式的tensor 并移动到gpu上
             init_points = torch.tensor(points).float().cuda()
+            # todo 看看这里的 计算点云中每个点到其他点的距离
             init_dist = distCUDA2(init_points).float().cuda()
             median_dist, _ = torch.kthvalue(init_dist, int(init_dist.shape[0]*0.5))
             self.voxel_size = median_dist.item()
@@ -505,7 +642,7 @@ class GaussianModel:
         return optimizable_tensors
 
 
-    # statis grad information to guide liftting. 
+    #todo statis grad information to guide liftting. 统计一段时间内锚点的梯度信息累积，用于指导锚点的增长
     def training_statis(self, viewspace_point_tensor, opacity, update_filter, offset_selection_mask, anchor_visible_mask):
         # update opacity stats
         temp_opacity = opacity.clone().view(-1).detach()
@@ -524,6 +661,7 @@ class GaussianModel:
         temp_mask = combined_mask.clone()
         combined_mask[temp_mask] = update_filter
         
+        # todo 为什么是:2 和dim=-1
         grad_norm = torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
         self.offset_gradient_accum[combined_mask] += grad_norm
         self.offset_denom[combined_mask] += 1
@@ -677,7 +815,7 @@ class GaussianModel:
                 self._opacity = optimizable_tensors["opacity"]
                 
 
-
+    # todo 锚点稠密化
     def adjust_anchor(self, check_interval=100, success_threshold=0.8, grad_threshold=0.0002, min_opacity=0.005):
         # # adding anchors
         grads = self.offset_gradient_accum / self.offset_denom # [N*k, 1]

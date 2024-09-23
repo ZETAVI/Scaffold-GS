@@ -13,6 +13,12 @@
 #include "simple_knn.h"
 
 torch::Tensor
+/**
+ * Calculates tahe pairwise Euclidean distance between points in the input tensor.
+ *
+ * @param points The input tensor containing the points.
+ * @return A tensor containing the pairwise Euclidean distances between points.
+ */
 distCUDA2(const torch::Tensor& points)
 {
   const int P = points.size(0);

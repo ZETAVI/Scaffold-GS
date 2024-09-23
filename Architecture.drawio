@@ -1,0 +1,228 @@
+<mxfile host="65bd71144e">
+    <diagram id="ueN988cnDvq12WWyW2mU" name="第 1 页">
+        <mxGraphModel dx="764" dy="1147" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="1654" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="training" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;fillColor=none;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;autosize=1;" parent="1" vertex="1">
+                    <mxGeometry x="150" y="280" width="140" height="104" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="+ field: type" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;autosize=1;" parent="2" vertex="1">
+                    <mxGeometry y="26" width="140" height="26" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="+ field: type" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;autosize=1;" parent="2" vertex="1">
+                    <mxGeometry y="52" width="140" height="26" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="+ field: type" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;autosize=1;" parent="2" vertex="1">
+                    <mxGeometry y="78" width="140" height="26" as="geometry"/>
+                </mxCell>
+                <object label="training" id="6">
+                    <mxCell style="swimlane;startSize=20;horizontal=1;childLayout=flowLayout;flowOrientation=north;resizable=0;interRankCellSpacing=50;containerType=tree;fontSize=12;flipV=0;autosize=1;" parent="1" vertex="1">
+                        <mxGeometry x="240" y="500" width="430" height="1390" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="17" value="+ item: attribute" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;autosize=1;" parent="6" vertex="1">
+                    <mxGeometry x="310" y="40" width="100" height="30" as="geometry"/>
+                </mxCell>
+                <object label="实例化场景的高斯点集" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="4" hedietLinkedDataV1_start_line_x-num="125" hedietLinkedDataV1_end_col_x-num="140" hedietLinkedDataV1_end_line_x-num="126" id="19">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" parent="6" vertex="1">
+                        <mxGeometry x="65" y="40" width="140" height="30" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="24" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" parent="6" source="19" target="25" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="135" y="82"/>
+                            <mxPoint x="135" y="108"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="实例化场景&lt;br&gt;负责维护坐标系变换对其&lt;br&gt;（相机）" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="4" hedietLinkedDataV1_start_line_x-num="127" hedietLinkedDataV1_end_col_x-num="71" hedietLinkedDataV1_end_line_x-num="128" id="25">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" parent="6" vertex="1">
+                        <mxGeometry x="55" y="120" width="160" height="60" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="46" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" parent="6" source="25" target="47" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1843.153712955522" y="3330" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="192"/>
+                            <mxPoint x="135" y="218"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="gaussian.training_setup&lt;br&gt;s设置训练的一些参数(学习率等)" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="4" hedietLinkedDataV1_start_line_x-num="129" hedietLinkedDataV1_end_col_x-num="44" hedietLinkedDataV1_end_line_x-num="133" id="47">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" parent="6" vertex="1">
+                        <mxGeometry x="40" y="230" width="190" height="40" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="58" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" parent="6" source="47" target="59" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1818.153712955522" y="3360" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="282"/>
+                            <mxPoint x="135" y="308"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="torch.cuda.Event&amp;nbsp;&lt;br&gt;tqdm&lt;br&gt;设置一些计时器和进度条" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="4" hedietLinkedDataV1_start_line_x-num="135" hedietLinkedDataV1_end_col_x-num="26" hedietLinkedDataV1_end_line_x-num="140" id="59">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" parent="6" vertex="1">
+                        <mxGeometry x="55" y="320" width="160" height="60" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="60" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" parent="6" source="59" target="61" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1778.153712955522" y="3370" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="392"/>
+                            <mxPoint x="135" y="418"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="61" value="开始训练" style="whiteSpace=wrap;html=1;autosize=1;" parent="6" vertex="1">
+                    <mxGeometry x="100" y="430" width="70" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="64" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" parent="6" source="61" target="85" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1803.153712955522" y="3400" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="472"/>
+                            <mxPoint x="135" y="498"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="设置背景颜色(白或黑)" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="8" hedietLinkedDataV1_start_line_x-num="169" hedietLinkedDataV1_end_col_x-num="79" hedietLinkedDataV1_end_line_x-num="171" id="65">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" parent="6" vertex="1">
+                        <mxGeometry x="65" y="600" width="140" height="30" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="66" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" parent="6" source="65" target="67" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1763.153712955522" y="3500" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="642"/>
+                            <mxPoint x="135" y="668"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="随机选取一个视角&lt;br&gt;scene.getTrainCameras().copy()&lt;br&gt;viewpoint_stack.pop(randint())" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="8" hedietLinkedDataV1_start_line_x-num="174" hedietLinkedDataV1_end_col_x-num="79" hedietLinkedDataV1_end_line_x-num="177" id="67">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" parent="6" vertex="1">
+                        <mxGeometry x="35" y="680" width="200" height="60" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="84" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" edge="1" target="65" source="85" parent="6">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1124.542601844411" y="2350" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="562"/>
+                            <mxPoint x="135" y="588"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="gaussian.update_learning_rate&lt;br&gt;(训练过程中调整学习率)" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="8" hedietLinkedDataV1_start_line_x-num="166" hedietLinkedDataV1_end_col_x-num="49" hedietLinkedDataV1_end_line_x-num="167" id="85">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" vertex="1" parent="6">
+                        <mxGeometry x="40" y="510" width="190" height="40" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="86" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" edge="1" target="87" source="67" parent="6">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="800" y="2010" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="752"/>
+                            <mxPoint x="135" y="778"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="计算视角的可见锚点mask&lt;br&gt;render()渲染" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="8" hedietLinkedDataV1_start_line_x-num="183" hedietLinkedDataV1_end_col_x-num="0" hedietLinkedDataV1_end_line_x-num="192" id="87">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" vertex="1" parent="6">
+                        <mxGeometry x="55" y="790" width="160" height="40" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="88" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" edge="1" target="89" source="87" parent="6">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="740" y="2000" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="842"/>
+                            <mxPoint x="135" y="868"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="计算渲染图与GT的Loss" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="8" hedietLinkedDataV1_start_line_x-num="193" hedietLinkedDataV1_end_col_x-num="95" hedietLinkedDataV1_end_line_x-num="200" id="89">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" vertex="1" parent="6">
+                        <mxGeometry x="60" y="880" width="150" height="30" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="90" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" edge="1" target="91" source="89" parent="6">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="680" y="1970" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="922"/>
+                            <mxPoint x="135" y="948"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="梯度计算" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="8" hedietLinkedDataV1_start_line_x-num="202" hedietLinkedDataV1_end_col_x-num="23" hedietLinkedDataV1_end_line_x-num="203" id="91">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" vertex="1" parent="6">
+                        <mxGeometry x="100" y="960" width="70" height="30" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="92" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" edge="1" target="93" source="91" parent="6">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="620" y="1930" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="1002"/>
+                            <mxPoint x="135" y="1028"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="更新tqdm的进度和显示" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="12" hedietLinkedDataV1_start_line_x-num="208" hedietLinkedDataV1_end_col_x-num="36" hedietLinkedDataV1_end_line_x-num="217" id="93">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" vertex="1" parent="6">
+                        <mxGeometry x="60" y="1040" width="150" height="30" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="94" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" edge="1" target="95" source="93" parent="6">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="560" y="1890" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="1082"/>
+                            <mxPoint x="135" y="1108"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="Log and save(saving_iterations)&lt;br&gt;这里的save是场景scene的保存&lt;br&gt;不是torch参数的保存(checkpoint)" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="12" hedietLinkedDataV1_start_line_x-num="219" hedietLinkedDataV1_end_col_x-num="37" hedietLinkedDataV1_end_line_x-num="223" id="95">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" vertex="1" parent="6">
+                        <mxGeometry x="35" y="1120" width="200" height="60" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="96" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" edge="1" target="97" source="95" parent="6">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="500" y="1850" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="1192"/>
+                            <mxPoint x="135" y="1218"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="锚点的densification：&lt;br&gt;training_statis()&lt;br&gt;adjust_anchor()" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="12" hedietLinkedDataV1_start_line_x-num="225" hedietLinkedDataV1_end_col_x-num="40" hedietLinkedDataV1_end_line_x-num="238" id="97">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" vertex="1" parent="6">
+                        <mxGeometry x="65" y="1230" width="140" height="60" as="geometry"/>
+                    </mxCell>
+                </object>
+                <mxCell id="98" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" edge="1" target="99" source="97" parent="6">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="440" y="1840" as="sourcePoint"/>
+                        <Array as="points">
+                            <mxPoint x="135" y="1302"/>
+                            <mxPoint x="135" y="1328"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <object label="使用optimizer.step()进行模型参数更新" hedietLinkedDataV1_path="../train.py" hedietLinkedDataV1_start_col_x-num="12" hedietLinkedDataV1_start_line_x-num="240" hedietLinkedDataV1_end_col_x-num="0" hedietLinkedDataV1_end_line_x-num="252" id="99">
+                    <mxCell style="whiteSpace=wrap;html=1;autosize=1;" vertex="1" parent="6">
+                        <mxGeometry x="20" y="1340" width="230" height="30" as="geometry"/>
+                    </mxCell>
+                </object>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

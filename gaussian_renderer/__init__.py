@@ -112,13 +112,30 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
 
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, visible_mask=None, retain_grad=False):
     """
-    Render the scene. 
-    
-    Background tensor (bg_color) must be on GPU!
+    todo Render the scene. 
+    Render the scene using Gaussian rendering technique.
+
+    Args:
+        viewpoint_camera (Camera): The camera used for rendering.
+        pc (GaussianModel): The Gaussian point clouds model representing the scene.
+        pipe: 对渲染训练管线的整体控制(如debug模式).
+        bg_color (torch.Tensor): The background color tensor. Must be on GPU.
+        scaling_modifier (float, optional): The scaling modifier for the scene. Defaults to 1.0.
+        visible_mask (torch.Tensor, optional): 可见视野的体素mask. Defaults to None.
+        retain_grad (bool, optional): Whether to retain gradients. Defaults to False.
+
+    Returns:
+        dict: A dictionary containing the rendered image and other information.
+
+    Note:
+        - Background tensor (bg_color) must be on GPU!
+        - If `is_training` is True, the function will generate neural Gaussians based on anchor points and consider visibility.
+        - If `is_training` is False, the function will generate neural Gaussians based on anchor points without considering visibility.
     """
     is_training = pc.get_color_mlp.training
         
     if is_training:
+        # 此处根据锚点来实时生成高斯点，会考虑可见性
         xyz, color, opacity, scaling, rot, neural_opacity, mask = generate_neural_gaussians(viewpoint_camera, pc, visible_mask, is_training=is_training)
     else:
         xyz, color, opacity, scaling, rot = generate_neural_gaussians(viewpoint_camera, pc, visible_mask, is_training=is_training)
@@ -137,6 +154,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
     tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
 
+    # 渲染过程中的高斯光栅化参数设置
     raster_settings = GaussianRasterizationSettings(
         image_height=int(viewpoint_camera.image_height),
         image_width=int(viewpoint_camera.image_width),
@@ -185,7 +203,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
 def prefilter_voxel(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
     """
-    Render the scene. 
+    todo Render the scene. 可见范围的过滤预处理
     
     Background tensor (bg_color) must be on GPU!
     """

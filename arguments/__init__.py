@@ -8,6 +8,8 @@
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
+# 当一个文件夹被视为 Python 的包（也就是说，它包含多个 Python 模块）时，__init__.py 文件就会被 Python 解释器自动调用，用于初始化这个包。
+# 定义了一些类, 用于处理和管理命令行参数
 
 from argparse import ArgumentParser, Namespace
 import sys
@@ -16,8 +18,14 @@ import os
 class GroupParams:
     pass
 
+# 自定义的参数解析和参数组构建基类
+#   1. 通过继承 ParamGroup 基类，可以直接调用基类的构造函数，将参数添加到 ArgumentParser 对象中
+#   2. 如果属性名以_开头，那么这个属性将有一个简写形式。例如，如果属性名为_source_path，那么在命令行中，我们可以使用--source_path或者-s来设置它的值
+#   3. 如果fill_none参数为True，那么所有的属性值都会被设置为None
+#   4. extract方法用于从命令行参数中提取出与当前参数组相关的参数
 class ParamGroup:
     def __init__(self, parser: ArgumentParser, name : str, fill_none = False):
+        # * add_argument_group() 方法用于创建一个新的参数组,并将参数添加到这个参数组中
         group = parser.add_argument_group(name)
         for key, value in vars(self).items():
             shorthand = False
@@ -37,14 +45,22 @@ class ParamGroup:
                 else:
                     group.add_argument("--" + key, default=value, type=t)
 
+    # 用户获取用户只定义的参数组
     def extract(self, args):
         group = GroupParams()
+        # * vars() 函数返回对象object的属性和属性值的字典对象
         for arg in vars(args).items():
             if arg[0] in vars(self) or ("_" + arg[0]) in vars(self):
+                # * setattr() 函数对应函数 getattr()，用于设置属性值，该属性不一定是类属性，且可以解析属性
+                # 等价于 group.'arg[0]' = 'arg[1]'
                 setattr(group, arg[0], arg[1])
         return group
 
+# 继承自 ParamGroup 基类, 在添加控制模型的参数后，直接调用基类____
 class ModelParams(ParamGroup): 
+    """
+    针对3DGS这个特定应用的参数设置，包括模型的几何特征、外观特征、优化参数等。
+    """
     def __init__(self, parser, sentinel=False):
         self.sh_degree = 3
         self.feat_dim = 32
@@ -70,6 +86,7 @@ class ModelParams(ParamGroup):
         self.ratio = 1 # sampling the input point cloud
         self.undistorted = False 
         
+        # 针对大场景数据集，有较大的视距变化，这意味着在大场景数据集中物体的透明度、协方差和颜色都有显著的变化，如果模型能够考虑这些变化，可能会得到更好的渲染效果。
         # In the Bungeenerf dataset, we propose to set the following three parameters to True,
         # Because there are enough dist variations.
         self.add_opacity_dist = False
@@ -78,12 +95,20 @@ class ModelParams(ParamGroup):
         
         super().__init__(parser, "Loading Parameters", sentinel)
 
+    # args：并没有特殊含义，只是我们调用的时候输入命令行参数
     def extract(self, args):
         g = super().extract(args)
         g.source_path = os.path.abspath(g.source_path)
         return g
 
 class PipelineParams(ParamGroup):
+    """
+    todo 还不知道是关于什么参数
+    可能是对整条训练渲染管线整体的控制
+    
+    Paras:
+        debug: 是否开启debug模式
+    """
     def __init__(self, parser):
         self.convert_SHs_python = False
         self.compute_cov3D_python = False
@@ -91,8 +116,13 @@ class PipelineParams(ParamGroup):
         super().__init__(parser, "Pipeline Parameters")
 
 class OptimizationParams(ParamGroup):
+    """
+    是对模型训练优化过程的具体参数设置（学习率、迭代次数、稀疏度等）。
+    """
     def __init__(self, parser):
         self.iterations = 30_000
+        # 在原版3DGS中对于高斯点位置的优化学习率会随着优化进度而调整
+        # 但这里由于使用了锚点,所以可以不用考虑不同场景或不同迭代次数下的学习率调整
         self.position_lr_init = 0.0
         self.position_lr_final = 0.0
         self.position_lr_delay_mult = 0.01
@@ -108,7 +138,7 @@ class OptimizationParams(ParamGroup):
         self.scaling_lr = 0.007
         self.rotation_lr = 0.002
         
-        
+        # 对于不同的MLP编码网络的学习率也会随着优化进度而调整
         self.mlp_opacity_lr_init = 0.002
         self.mlp_opacity_lr_final = 0.00002  
         self.mlp_opacity_lr_delay_mult = 0.01

@@ -15,3 +15,7 @@ diff_rasterization/dist
 tensorboard_3d
 screenshots
 *.so
+SIBR_viewers/build/*
+SIBR_viewers/extlibs/*
+SIBR_viewers/install/*
+.idea

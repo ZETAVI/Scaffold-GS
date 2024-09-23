@@ -7,6 +7,7 @@
 # under the terms of the LICENSE.md file.
 #
 # For inquiries contact  george.drettakis@inria.fr
+# 主要用于处理网络通信，建立连接，发送和接收数据
 #
 
 import torch
@@ -21,6 +22,9 @@ port = 6009
 conn = None
 addr = None
 
+# 这行代码创建了一个新的套接字对象
+# socket.AF_INET：这是地址族的参数，表示我们将使用IPv4网络。
+# socket.SOCK_STREAM：这是套接字类型的参数，表示我们将使用TCP套接字。提供了可靠的双向连接。
 listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 def init(wish_host, wish_port):
