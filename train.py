@@ -144,23 +144,23 @@ def training(dataset, opt, pipe, dataset_name, testing_iterations, saving_iterat
     # 开始训练
     first_iter += 1
     for iteration in range(first_iter, opt.iterations + 1):
-        # network gui not available in scaffold-gs yet 用于显示的网络连接
-        if network_gui.conn == None:
-            network_gui.try_connect()
-        while network_gui.conn != None:
-            # 这一部分场景渲染并传输展示部分,要在训练结束后才进行
-            try:
-                net_image_bytes = None
-                # 从网络gui接收用户端数据(如相机位置\训练控制等)
-                custom_cam, do_training, pipe.convert_SHs_python, pipe.compute_cov3D_python, keep_alive, scaling_modifer = network_gui.receive()
-                if custom_cam != None:
-                    net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
-                    net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
-                network_gui.send(net_image_bytes, dataset.source_path)
-                if do_training and ((iteration < int(opt.iterations)) or not keep_alive):
-                    break
-            except Exception as e:
-                network_gui.conn = None
+        # # network gui not available in scaffold-gs yet 用于显示的网络连接
+        # if network_gui.conn == None:
+        #     network_gui.try_connect()
+        # while network_gui.conn != None:
+        #     # 这一部分场景渲染并传输展示部分,要在训练结束后才进行
+        #     try:
+        #         net_image_bytes = None
+        #         # 从网络gui接收用户端数据(如相机位置\训练控制等)
+        #         custom_cam, do_training, pipe.convert_SHs_python, pipe.compute_cov3D_python, keep_alive, scaling_modifer = network_gui.receive()
+        #         if custom_cam != None:
+        #             net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
+        #             net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
+        #         network_gui.send(net_image_bytes, dataset.source_path)
+        #         if do_training and ((iteration < int(opt.iterations)) or not keep_alive):
+        #             break
+        #     except Exception as e:
+        #         network_gui.conn = None
 
         iter_start.record()
 
@@ -188,7 +188,8 @@ def training(dataset, opt, pipe, dataset_name, testing_iterations, saving_iterat
         # 渲染 得到渲染结果包
         render_pkg = render(viewpoint_cam, gaussians, pipe, background, visible_mask=voxel_visible_mask, retain_grad=retain_grad)
 
-        # todo 看看render_pkg具体是什么,还有visibility_filter和visible_mask有什么不同,还有radii和scaling的含义
+        # visibility_filter是所有被激活anchor下激活的offset在cuda渲染时的可见性, visible_mask是锚点的可见性(还不是锚点内特定offset的激活)
+        # radii与scaling有关,但radii是2D投影后scaling的长边的1.5倍(考虑正太分布的三个标准差内 99.73%)
         image, viewspace_point_tensor, visibility_filter, offset_selection_mask, radii, scaling, opacity = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["selection_mask"], render_pkg["radii"], render_pkg["scaling"], render_pkg["neural_opacity"]
 
         # .cuda() 是 PyTorch 中的一个方法，用于将 Tensor 对象移动到 GPU 上进行计算。
@@ -287,18 +288,18 @@ def prepare_output_and_logger(args, opt, pipe):
         cfg_log_f.write(str(Namespace(**vars(pipe))))
 
 
-     # 每次运行备份文件
-    if os.path.exists(args.model_path + "/backup"):
-        count = 1
-        for entry in os.listdir(args.model_path):
-            entry_path = os.path.join(args.model_path, entry)
-            if os.path.isdir(entry_path) and entry.startswith('backup'):
-                count += 1
-        cmd = "rsync -a --exclude='output' --exclude='submodules/diff-gaussian-rasterization/cuda_rasterizer/stdOut' --exclude='submodules/diff-gaussian-rasterization/build' . " + args.model_path + "/backup"  + str(count)
-        os.system(cmd)
-    else:
-        cmd = "rsync -a --exclude='output' --exclude='submodules/diff-gaussian-rasterization/cuda_rasterizer/stdOut' --exclude='submodules/diff-gaussian-rasterization/build' . " + args.model_path + "/backup"
-        os.system(cmd)
+    #  # 每次运行备份文件
+    # if os.path.exists(args.model_path + "/backup"):
+    #     count = 1
+    #     for entry in os.listdir(args.model_path):
+    #         entry_path = os.path.join(args.model_path, entry)
+    #         if os.path.isdir(entry_path) and entry.startswith('backup'):
+    #             count += 1
+    #     cmd = "rsync -a --exclude='outputs' --exclude='submodules/diff-gaussian-rasterization/cuda_rasterizer/stdOut' --exclude='submodules/diff-gaussian-rasterization/build' . " + args.model_path + "/backup"  + str(count)
+    #     os.system(cmd)
+    # else:
+    #     cmd = "rsync -a --exclude='outputs' --exclude='submodules/diff-gaussian-rasterization/cuda_rasterizer/stdOut' --exclude='submodules/diff-gaussian-rasterization/build' . " + args.model_path + "/backup"
+    #     os.system(cmd)
 
 
     # Create Tensorboard writer
@@ -665,7 +666,7 @@ if __name__ == "__main__":
     safe_state(args.quiet)
 
     # Start GUI server, configure and run training
-    network_gui.init(args.ip, args.port)
+    # network_gui.init(args.ip, args.port)
     # 设置检测异常的模式，如果设置为True，那么当出现异常时，PyTorch会自动停止程序并打印出异常的位置
     # 例如在反向传播过程中检测到NaN或无穷大值。启用异常检测模式后，一旦检测到这些问题，程序会立即停止，并提供有关错误发生位置的详细信息，这有助于定位问题的源头。
     # 原理是利用了上下文管理器with, 一进入with先检查异常，然后执行with内的代码，如果with内的代码出现异常，就会抛出异常，然后执行with外的代码(类似于try)
