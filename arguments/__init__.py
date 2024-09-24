@@ -63,12 +63,12 @@ class ModelParams(ParamGroup):
     """
     def __init__(self, parser, sentinel=False):
         self.sh_degree = 3
-        self.feat_dim = 32
+        self.feat_dim = 32  # 锚点特征的长度
         self.n_offsets = 10
-        self.voxel_size =  0.001 # if voxel_size<=0, using 1nn dist
-        self.update_depth = 3
-        self.update_init_factor = 16
-        self.update_hierachy_factor = 4
+        self.voxel_size =  0.001 # if voxel_size<=0, using 1nn dist(如果size<0,自动选取初始化时点与点距离的中位数作为voxel_size) 初始化的体素大小
+        self.update_depth = 3 # growing anchor的三种分辨率,比base_voxel大4倍/一样大/小4倍
+        self.update_init_factor = 16  # 初始化时体素的大小对应的比例,设置为16,后续按照16为基准来按比例调整多分辨率体素的大小和阈值
+        self.update_hierachy_factor = 4 # 多分辨率体素每一层之间的比例,会影响每一层稠密化的梯度阈值和体素大小,设置为4
 
         self.use_feat_bank = False
         self._source_path = ""
@@ -80,10 +80,10 @@ class ModelParams(ParamGroup):
         self.eval = False
         self.lod = 0
 
-        self.appearance_dim = 32
+        self.appearance_dim = 32    # 解码锚点特征的MLP中间层隐藏层的dim
         self.lowpoly = False
         self.ds = 1
-        self.ratio = 1 # sampling the input point cloud
+        self.ratio = 1 # sampling the input point cloud 用来控制从pcd中初始化高斯点的比率,不是全部点云都转换为高斯点
         self.undistorted = False 
         
         # 针对大场景数据集，有较大的视距变化，这意味着在大场景数据集中物体的透明度、协方差和颜色都有显著的变化，如果模型能够考虑这些变化，可能会得到更好的渲染效果。
@@ -103,7 +103,7 @@ class ModelParams(ParamGroup):
 
 class PipelineParams(ParamGroup):
     """
-    todo 还不知道是关于什么参数
+    对pipeline的影响,是否使用python计算
     可能是对整条训练渲染管线整体的控制
     
     Paras:

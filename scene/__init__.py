@@ -65,7 +65,7 @@ class Scene:
 
         # 根据场景类型加载场景信息并返回（colmap/Blender）
         if os.path.exists(os.path.join(args.source_path, "sparse")):
-            # todo 这里的eval参数一直为false吗,那测试集不就没有东西了吗
+            # 这里的eval参数一直为false吗,那测试集不就没有东西了吗  -- 是的 全部用于训练
             scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.eval, args.lod)
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
             print("Found transforms_train.json file, assuming Blender data set!")

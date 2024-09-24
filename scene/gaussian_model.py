@@ -111,42 +111,55 @@ class GaussianModel:
                  add_color_dist : bool = False,
                  ):
 
-        self.feat_dim = feat_dim
-        self.n_offsets = n_offsets
-        self.voxel_size = voxel_size
-        self.update_depth = update_depth    # todo 未知
-        self.update_init_factor = update_init_factor    # todo 未知
-        self.update_hierachy_factor = update_hierachy_factor   # todo 未知
-        self.use_feat_bank = use_feat_bank
+        self.feat_dim = feat_dim    # 32
+        self.n_offsets = n_offsets  # 10
+        self.voxel_size = voxel_size     # if voxel_size<=0, using 1nn dist(如果size<0,自动选取初始化时点与点距离的中位数作为voxel_size) 初始化的体素大小
+        self.update_depth = update_depth    # growing anchor的三种不同分辨率深度
+        self.update_init_factor = update_init_factor    # 初始化时体素的大小对应的比例,设置为16,后续按照16为基准来按比例调整多分辨率体素的大小和阈值
+        self.update_hierachy_factor = update_hierachy_factor   # 多分辨率体素每一层之间的比例,会影响每一层稠密化的梯度阈值和体素大小,设置为4
+        self.use_feat_bank = use_feat_bank  # 是否三种不同颗粒度的锚点特征融合, 来提高view-adaptability 默认为False
 
-        self.appearance_dim = appearance_dim    # todo 未知
-        self.embedding_appearance = None    # todo 未知
+        self.appearance_dim = appearance_dim    # 解码锚点特征的MLP中间层隐藏层的dim
+        self.embedding_appearance = None    # MLP中间的隐藏层(就一层 用Embedding(num_cameras, self.appearance_dim).cuda()建模)
         self.ratio = ratio  # 用来控制从pcd中初始化高斯点的比率,不是全部点云都转换为高斯点
+        # 针对大场景数据集，有较大的视距变化，这意味着在大场景数据集中物体的透明度、协方差和颜色都有显著的变化，如果模型能够考虑这些变化，可能会得到更好的渲染效果。
         self.add_opacity_dist = add_opacity_dist
         self.add_cov_dist = add_cov_dist
         self.add_color_dist = add_color_dist
 
-        # 这些带有_的变量都是需要网络学习的参数
+        # 这些带有_的变量都是需要网络学习的参数(以锚点为主体)
+        # 锚点的位置(N,3)
         self._anchor = torch.empty(0)
+        # 锚点下高斯点的偏移位置(N,k_offsets,3)
         self._offset = torch.empty(0)
+        # 锚点的特征(N,feat_dim)
         self._anchor_feat = torch.empty(0)
         
-        # todo 未知
+        # 在每一次优化中,统计每个锚点下offset不透明度的总和,用于剔除锚点
         self.opacity_accum = torch.empty(0)
 
+        # 锚点对应的属性
+        # (N,6) 
         self._scaling = torch.empty(0)
+        # (N,4)
         self._rotation = torch.empty(0)
+        # (N,1)
         self._opacity = torch.empty(0)
+        # (N)
         self.max_radii2D = torch.empty(0)
         
+        # 在每一次优化中,统计被激活且参加渲染的高斯点的梯度累积,后续在每100次是用于判断稠密化
         self.offset_gradient_accum = torch.empty(0)
+        # 计数器 (N,1)
         self.offset_denom = torch.empty(0)
 
+        # 在每一次优化中,统计被激活参与渲染的次数
         self.anchor_demon = torch.empty(0)
                 
         self.optimizer = None
+        # 用于剔除, 场景对角线的1%, 控制高斯点的密度
         self.percent_dense = 0
-        self.spatial_lr_scale = 0   # 初始化空间学习率缩放为0
+        self.spatial_lr_scale = 0   # 空间学习率缩放,即colmap空间对角线半径
         self.setup_functions()
 
         if self.use_feat_bank:
@@ -274,7 +287,7 @@ class GaussianModel:
     # ? 疑问：为什么需要将训练相机个数编码成appearance_dim维度的向量
     # 这里好像不是GLO的思想（因为GLO是每张图片一个embedding，而这里对于整个Gaussian就只有一个embedding）
     def set_appearance(self, num_cameras):
-        # 好像这个appearance_dim一直为0
+        # appearance_dim = 32
         if self.appearance_dim > 0:
             self.embedding_appearance = Embedding(num_cameras, self.appearance_dim).cuda()
 
@@ -365,17 +378,20 @@ class GaussianModel:
         Returns:
             None
         """
-        # todo 看看spatial_lr_scale对于不同场景是不是都在5附近
+        # 看看spatial_lr_scale对于不同场景是不是都在5附近 好像是
+        # 场景的对角线半径
         self.spatial_lr_scale = spatial_lr_scale
         # 这里ratio可以做到跳点采样初始化,以控制高斯点数量
         points = pcd.points[::self.ratio]
 
         if self.voxel_size <= 0:
-            # todo 看这里的points是结构,如何tensor化
             # 将二维的points数组转换为浮点形式的tensor 并移动到gpu上
             init_points = torch.tensor(points).float().cuda()
-            # todo 看看这里的 计算点云中每个点到其他点的距离
+            # 计算点云中每个点到其他点的距离
             init_dist = distCUDA2(init_points).float().cuda()
+            # kthvalue 是 PyTorch 中的一个函数，用于在张量中找到第 k 小的值及其索引。它的作用类似于排序，但只返回第 k 小的值，而不是对整个张量进行排序。
+            # 这里K=点数的一半,通过这种方式，你可以有效地找到点云中每个点到其他点的距离的中位数，这在某些算法中可能是一个重要的统计量。
+            # 使用距离的中位数作为初始体素的大小
             median_dist, _ = torch.kthvalue(init_dist, int(init_dist.shape[0]*0.5))
             self.voxel_size = median_dist.item()
             del init_dist
@@ -384,7 +400,7 @@ class GaussianModel:
 
         print(f'Initial voxel_size: {self.voxel_size}')
         
-        
+        # 将点云体素化,points[Anchor,3],表示锚点位置
         points = self.voxelize_sample(points, voxel_size=self.voxel_size)
         fused_point_cloud = torch.tensor(np.asarray(points)).float().cuda()
         offsets = torch.zeros((fused_point_cloud.shape[0], self.n_offsets, 3)).float().cuda()
@@ -642,26 +658,50 @@ class GaussianModel:
         return optimizable_tensors
 
 
-    #todo statis grad information to guide liftting. 统计一段时间内锚点的梯度信息累积，用于指导锚点的增长
+    # statis grad information to guide liftting. 统计一段时间内锚点的梯度信息累积，用于指导锚点的增长
     def training_statis(self, viewspace_point_tensor, opacity, update_filter, offset_selection_mask, anchor_visible_mask):
+        """
+        统计一段时间内锚点的梯度信息累积，用于指导锚点的增长
+        Args:
+            viewspace_point_tensor (torch.Tensor): 在某个iteration真正被激活的offset的所有高斯点的mean2D梯度
+            opacity (torch.Tensor): 所有锚点下所有offset高斯点的不透明度(neural_opacity)
+            update_filter (torch.Tensor): 所有被激活的offset高斯点的visible mask (即在视野内的高斯点 radii>0)
+            offset_selection_mask (torch.Tensor): 每个锚点具体被激活的offset
+            anchor_visible_mask (torch.Tensor): 基于体素的锚点可见性
+        Updates:
+            self.opacity_accum (torch.Tensor): 所有锚点的不透明度累积
+            self.anchor_demon (torch.Tensor): 锚点被激活的计数器 Counts the number of times each anchor is visited.
+            self.offset_gradient_accum (torch.Tensor): 所有的offset高斯点的梯度累积(只更新被激活且radii>0的高斯点) Accumulates gradient norms for selected offsets.
+            self.offset_denom (torch.Tensor): 所有高斯点被激活且radii>0可见的计数器 Counts the number of times each offset is updated.
+        """
+
         # update opacity stats
+        # 取出所有高斯点的不透明度
         temp_opacity = opacity.clone().view(-1).detach()
         temp_opacity[temp_opacity<0] = 0
         
+        # 每个锚点上都是n_offsets个高斯点,所以这里可以对temp_opacity进行整理,用来计算每个锚点上的综合不透明度
         temp_opacity = temp_opacity.view([-1, self.n_offsets])
         self.opacity_accum[anchor_visible_mask] += temp_opacity.sum(dim=1, keepdim=True)
         
-        # update anchor visiting statis
+        # update anchor visiting statis 计数器
         self.anchor_demon[anchor_visible_mask] += 1
 
         # update neural gaussian statis
+        # anchor_visible_mask本来形状为(N),这里先扩展为(N,1),然后复制n_offsets份(N,offset)，最后展平,即所有高斯点的mask
         anchor_visible_mask = anchor_visible_mask.unsqueeze(dim=1).repeat([1, self.n_offsets]).view(-1)
         combined_mask = torch.zeros_like(self.offset_gradient_accum, dtype=torch.bool).squeeze(dim=1)
+        # 激活的anchor中被激活的offset 高斯点
         combined_mask[anchor_visible_mask] = offset_selection_mask
         temp_mask = combined_mask.clone()
+        # 上面的步骤都是先确定哪些offset被激活
+
+        # 在激活的anchor点中再次被激活的offset中,并不是所有被激活的高斯点都是可见的,有些被激活的高斯点可能也在视野之外
+        # 在cuda渲染的时候传入的是所有offset激活的高斯点,但是只有可见的高斯点才会被渲染
+        # 这里combined_mask[temp_mask]先选择出被激活的高斯点(即真正传到cuda考虑渲染的点),但是否真正渲染还要看是否在视野内,所以这里updata_filter和combined_mask[temp_mask]一样形状
         combined_mask[temp_mask] = update_filter
         
-        # todo 为什么是:2 和dim=-1
+        # 只对mean2D XY方向上的梯度做正则化,按行来求二范数
         grad_norm = torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
         self.offset_gradient_accum[combined_mask] += grad_norm
         self.offset_denom[combined_mask] += 1
@@ -722,12 +762,14 @@ class GaussianModel:
         init_length = self.get_anchor.shape[0]*self.n_offsets
         for i in range(self.update_depth):
             # update threshold
+            # 大16倍的阈值为threhold, 大4倍的阈值为threshold*2, 一样大的阈值为threshold*4
             cur_threshold = threshold*((self.update_hierachy_factor//2)**i)
             # mask from grad threshold
             candidate_mask = (grads >= cur_threshold)
             candidate_mask = torch.logical_and(candidate_mask, offset_mask)
             
             # random pick
+            # candidata_mask 用来在所有offset中选择出梯度较高的高斯点
             rand_mask = torch.rand_like(candidate_mask.float())>(0.5**(i+1))
             rand_mask = rand_mask.cuda()
             candidate_mask = torch.logical_and(candidate_mask, rand_mask)
@@ -739,51 +781,80 @@ class GaussianModel:
             else:
                 candidate_mask = torch.cat([candidate_mask, torch.zeros(length_inc, dtype=torch.bool, device='cuda')], dim=0)
 
+            # 计算出所有offset高斯点基于锚点的偏移位置 
+            # self.get_scaling[:,:3].unsqueeze(dim=1) --- (N,1,3)
+            # self._offset (N,k_offsets,3)
+            # 最终的形状是(N,k_offsets,3)
             all_xyz = self.get_anchor.unsqueeze(dim=1) + self._offset * self.get_scaling[:,:3].unsqueeze(dim=1)
             
             # assert self.update_init_factor // (self.update_hierachy_factor**i) > 0
             # size_factor = min(self.update_init_factor // (self.update_hierachy_factor**i), 1)
+            # 计算当前体素的大小,即分辨率,update_init_factor=16,update_hierachy_factor=4, 所以三种分辨率有比voxel_size大16倍/大4倍/一样大/还有小4倍的
             size_factor = self.update_init_factor // (self.update_hierachy_factor**i)
             cur_size = self.voxel_size*size_factor
             
             grid_coords = torch.round(self.get_anchor / cur_size).int()
 
+            # 计算出所有需要稠密化被选中的offset高斯点在当前voxelsize下的坐标
             selected_xyz = all_xyz.view([-1, 3])[candidate_mask]
             selected_grid_coords = torch.round(selected_xyz / cur_size).int()
-
+            # 其实这个unique相当于排序(但去重结果不一定严格升序,可以通过sorted (bool) 参数指定),然后去重,最后返回去重后结果的值
+            # 并返回原来tensor的元素在去重后的位置 (因为这里return_inverse=True)
+            #  --- Whether to also return the indices for where elements in the original input ended up in the returned unique list.
             selected_grid_coords_unique, inverse_indices = torch.unique(selected_grid_coords, return_inverse=True, dim=0)
 
 
             ## split data for reducing peak memory calling
+            # 使用chunk将现有的锚点位置分批,分批后再与当前稠密化需要的新锚点位置做匹配
             use_chunk = True
             if use_chunk:
                 chunk_size = 4096
                 max_iters = grid_coords.shape[0] // chunk_size + (1 if grid_coords.shape[0] % chunk_size != 0 else 0)
                 remove_duplicates_list = []
                 for i in range(max_iters):
+                    # 这里selected_grid_coords_unique和grid_coords的形状是不一样的(n,1,3)与(4096,3),所以要扩展一下
+                    # 这里的目的就是找出所有需要被稠密化的offset,在当前voxelsize下,是否能重用一些已有的锚点.(即需要稠密化的offset计算出来需要的锚点位置是否和已有的锚点位置一样)
+                    # 所以这里grid_coords就是根据当前已有的锚点和当前的voxelsize计算出来的锚点坐标(结果为n,4096,3)
+                    # .all(-1)：沿最后一个维度（即第 3 维）进行逻辑与操作,即需要的锚点中心与已有的锚点位置完全相等(变为n,4096)
+                    # .any(-1)：沿最后一个维度（即第 2 维）进行逻辑或操作,即只要需要的锚点中心与已有的匹配(all已经判断为是否完全相等)(变为n)
+                    # .view(-1)：将结果展平(其实没有变化,本来就是一维的)
                     cur_remove_duplicates = (selected_grid_coords_unique.unsqueeze(1) == grid_coords[i*chunk_size:(i+1)*chunk_size, :]).all(-1).any(-1).view(-1)
+                    # cur_remove_duplicates 是一个一维的tensor,最终都append进remove_duplicates_list中
                     remove_duplicates_list.append(cur_remove_duplicates)
-                
+
+                # 用于将多个布尔张量合并为一个布尔张量。具体来说，它使用逻辑或 (torch.logical_or) 操作将 remove_duplicates_list 中的所有布尔张量逐元素进行或运算
+                # 这里remove_duplicates_list中每个tensor的形状都一样,最终得到一个布尔张量 remove_duplicates，表示所有块中重复坐标的合并结果
                 remove_duplicates = reduce(torch.logical_or, remove_duplicates_list)
             else:
                 remove_duplicates = (selected_grid_coords_unique.unsqueeze(1) == grid_coords).all(-1).any(-1).view(-1)
 
             remove_duplicates = ~remove_duplicates
+            # 考虑去重和复用锚点之后,还需要稠密化的锚点坐标,这里*cur_size是为了从当前voxel的坐标系转换到世界坐标系,其实还是体素的中心
             candidate_anchor = selected_grid_coords_unique[remove_duplicates]*cur_size
 
             
             if candidate_anchor.shape[0] > 0:
+                # 新锚点的scaling初始化为cur_size
                 new_scaling = torch.ones_like(candidate_anchor).repeat([1,2]).float().cuda()*cur_size # *0.05
                 new_scaling = torch.log(new_scaling)
                 new_rotation = torch.zeros([candidate_anchor.shape[0], 4], device=candidate_anchor.device).float()
                 new_rotation[:,0] = 1.0
 
+                # 新锚点的不透明度初始化为0.1
                 new_opacities = inverse_sigmoid(0.1 * torch.ones((candidate_anchor.shape[0], 1), dtype=torch.float, device="cuda"))
 
+                # 用来一个比较笨的方法来创建新锚点的特征初始化,将锚点的特征都复制K_offset份,然后通过需要稠密化的offset高斯点的mask来选择(这里的结果是n,32)
                 new_feat = self._anchor_feat.unsqueeze(dim=1).repeat([1, self.n_offsets, 1]).view([-1, self.feat_dim])[candidate_mask]
 
+                # scatter_max是另外一个库pytorch_scattor中的函数
+                # scatter_max(src, index, dim=-1, out=None, dim_size=None, fill_value=None)
+                # index表示out[index]位置的值,如果发生冲突则选最大值,在dim维度上进行最大值的聚合(即变动dim来移动,这里dim=0,即按行来进行index和src的聚合)
+                # index和scr形状要一样,这里new_feat(n,32)还没考虑重复,所以这里用inverse_indices来合并重复锚点的特征,选取32个维度中每个维度的最大值
+                # 如new_feat:torch.Size([42124, 32]),index:torch.Size([42124, 32]) 结果为torch.Size([41632, 32]) --- 到这里得到的是去重后需要的锚点的特征
+                # 因为考虑已有锚点的复用,所以最后还需要选取出还没有的锚点位置,[remove_duplicates],结果为torch.Size([40110, 32])
                 new_feat = scatter_max(new_feat, inverse_indices.unsqueeze(1).expand(-1, new_feat.size(1)), dim=0)[0][remove_duplicates]
 
+                # offset每个维度上的偏移都初始化为1
                 new_offsets = torch.zeros_like(candidate_anchor).unsqueeze(dim=1).repeat([1,self.n_offsets,1]).float().cuda()
 
                 d = {
@@ -795,7 +866,7 @@ class GaussianModel:
                     "opacity": new_opacities,
                 }
                 
-
+                # 添加新锚点的计数器
                 temp_anchor_demon = torch.cat([self.anchor_demon, torch.zeros([new_opacities.shape[0], 1], device='cuda').float()], dim=0)
                 del self.anchor_demon
                 self.anchor_demon = temp_anchor_demon
@@ -815,17 +886,21 @@ class GaussianModel:
                 self._opacity = optimizable_tensors["opacity"]
                 
 
-    # todo 锚点稠密化
+    # 锚点稠密化
     def adjust_anchor(self, check_interval=100, success_threshold=0.8, grad_threshold=0.0002, min_opacity=0.005):
         # # adding anchors
         grads = self.offset_gradient_accum / self.offset_denom # [N*k, 1]
         grads[grads.isnan()] = 0.0
+        # 因为一个锚点下有offset个高斯点,所以这里算个二范数来代表该锚点的区块
         grads_norm = torch.norm(grads, dim=-1)
+        # 在K次优化中,某个offset高斯点要至少激活40%*K次才考虑稠密化 --- 表示剔除或稠密化的候选offset高斯点
+        # 这里squeeze将竖排变为横排
         offset_mask = (self.offset_denom > check_interval*success_threshold*0.5).squeeze(dim=1)
         
         self.anchor_growing(grads_norm, grad_threshold, offset_mask)
         
         # update offset_denom
+        # 因为前面对anchor点进行了增长,所以这里对offset_denom进行扩展,扩充数量为新锚点的数量
         self.offset_denom[offset_mask] = 0
         padding_offset_demon = torch.zeros([self.get_anchor.shape[0]*self.n_offsets - self.offset_denom.shape[0], 1],
                                            dtype=torch.int32, 
@@ -840,10 +915,12 @@ class GaussianModel:
         
         # # prune anchors
         prune_mask = (self.opacity_accum < min_opacity*self.anchor_demon).squeeze(dim=1)
+        # # 在K次优化中,某个offset高斯点要至少激活80%*K次才考虑剔除
         anchors_mask = (self.anchor_demon > check_interval*success_threshold).squeeze(dim=1) # [N, 1]
         prune_mask = torch.logical_and(prune_mask, anchors_mask) # [N] 
         
         # update offset_denom
+        # 前面做了剔除,需要相应减少相关梯度计数器的数量(先对与offset有关的计数器，后续还会对基于锚点的计数器)
         offset_denom = self.offset_denom.view([-1, self.n_offsets])[~prune_mask]
         offset_denom = offset_denom.view([-1, 1])
         del self.offset_denom
@@ -856,9 +933,11 @@ class GaussianModel:
         
         # update opacity accum 
         if anchors_mask.sum()>0:
+            # 对于本次不透明度检测的锚点,先对其不透明度累积重置
             self.opacity_accum[anchors_mask] = torch.zeros([anchors_mask.sum(), 1], device='cuda').float()
             self.anchor_demon[anchors_mask] = torch.zeros([anchors_mask.sum(), 1], device='cuda').float()
         
+        # 再删除掉不透明度较低需要剔除的锚点对应的统计信息空间
         temp_opacity_accum = self.opacity_accum[~prune_mask]
         del self.opacity_accum
         self.opacity_accum = temp_opacity_accum
@@ -870,6 +949,7 @@ class GaussianModel:
         if prune_mask.shape[0]>0:
             self.prune_anchor(prune_mask)
         
+        # 剔除完后重置每个锚点的半径尺度
         self.max_radii2D = torch.zeros((self.get_anchor.shape[0]), device="cuda")
 
     def save_mlp_checkpoints(self, path, mode = 'split'):#split or unite

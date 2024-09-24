@@ -121,21 +121,31 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         pipe: 对渲染训练管线的整体控制(如debug模式).
         bg_color (torch.Tensor): The background color tensor. Must be on GPU.
         scaling_modifier (float, optional): The scaling modifier for the scene. Defaults to 1.0.
-        visible_mask (torch.Tensor, optional): 可见视野的体素mask. Defaults to None.
+        visible_mask (torch.Tensor, optional): 可见视野的体素mask. 
         retain_grad (bool, optional): Whether to retain gradients. Defaults to False.
 
     Returns:
         dict: A dictionary containing the rendered image and other information.
-
+            viewspace_points: 激活的anchor下所有被激活的offset高斯点的视图空间梯度mean2D
+            visibility_filter: 激活的anchor下所有被激活的offset高斯点在渲染时的可见性(虽然已经对体素做了可见性过滤,但激活出来offset也有可能在视野外)
+            radii: 激活的anchor下所有被激活的offset高斯点在渲染时的半径
+            selection_mask(mask): 可见的anchor下 对应被激活的offset高斯点
+            neural_opacity: 全体锚点下所有高斯点的opacity
+            scaling: 激活的anchor下所有被激活的offset高斯点的scaling
+            radii: 激活的anchor下所有被激活的offset高斯点的半径(与scaling有关,但不完全一样, radii取2D投影后scaling的长边的1.5倍,作为高斯点半径)
+            
     Note:
         - Background tensor (bg_color) must be on GPU!
         - If `is_training` is True, the function will generate neural Gaussians based on anchor points and consider visibility.
         - If `is_training` is False, the function will generate neural Gaussians based on anchor points without considering visibility.
     """
+    # mlp是一个nn.Sequential,这个model通过.train()和.eval()来切换训练和测试模式
     is_training = pc.get_color_mlp.training
         
     if is_training:
-        # 此处根据锚点来实时生成高斯点，会考虑可见性
+        # 此处根据可见的锚点来实时生成高斯点，(在render函数前已经调用prefilter_voxel函数对锚点进行了可见性过滤)
+        # selection_mask(mask): 可见的anchor下 对应被激活的offset高斯点
+        # neural_opacity: 全体锚点下所有高斯点的opacity
         xyz, color, opacity, scaling, rot, neural_opacity, mask = generate_neural_gaussians(viewpoint_camera, pc, visible_mask, is_training=is_training)
     else:
         xyz, color, opacity, scaling, rot = generate_neural_gaussians(viewpoint_camera, pc, visible_mask, is_training=is_training)
