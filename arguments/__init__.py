@@ -77,7 +77,7 @@ class ModelParams(ParamGroup):
         self._resolution = -1
         self._white_background = False
         self.data_device = "cuda"
-        self.eval = False
+        self.eval = True
         self.lod = 0
 
         self.appearance_dim = 32    # 解码锚点特征的MLP中间层隐藏层的dim
