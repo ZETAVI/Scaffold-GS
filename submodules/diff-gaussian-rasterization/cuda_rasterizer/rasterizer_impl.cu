@@ -216,6 +216,7 @@ int CudaRasterizer::Rasterizer::forward(
 	const float tan_fovx, float tan_fovy,
 	const bool prefiltered,
 	float* out_color,
+	float* pixels,
 	int* radii,
 	bool debug)
 {
@@ -330,7 +331,8 @@ int CudaRasterizer::Rasterizer::forward(
 		imgState.accum_alpha,
 		imgState.n_contrib,
 		background,
-		out_color
+		out_color,
+		pixels
 		), debug)
 
 	return num_rendered;
@@ -427,6 +429,7 @@ void CudaRasterizer::Rasterizer::backward(
 	float* dL_dsh,
 	float* dL_dscale,
 	float* dL_drot,
+	float* depth,
 	bool debug)
 {
 	GeometryState geomState = GeometryState::fromChunk(geom_buffer, P);
@@ -491,5 +494,6 @@ void CudaRasterizer::Rasterizer::backward(
 		dL_dcov3D,
 		dL_dsh,
 		(glm::vec3*)dL_dscale,
-		(glm::vec4*)dL_drot), debug)
+		(glm::vec4*)dL_drot,
+		depth), debug)
 }

@@ -152,6 +152,8 @@ class GaussianModel:
         self.offset_gradient_accum = torch.empty(0)
         # 计数器 (N,1)
         self.offset_denom = torch.empty(0)
+        # 每次优化中高斯点涉及的像素点
+        self.offset_denom_pixels = torch.empty(0)
 
         # 在每一次优化中,统计被激活参与渲染的次数
         self.anchor_demon = torch.empty(0)
@@ -432,6 +434,7 @@ class GaussianModel:
 
         self.offset_gradient_accum = torch.zeros((self.get_anchor.shape[0]*self.n_offsets, 1), device="cuda")
         self.offset_denom = torch.zeros((self.get_anchor.shape[0]*self.n_offsets, 1), device="cuda")
+        self.offset_denom_pixels = torch.zeros((self.get_anchor.shape[0]*self.n_offsets, 1), device="cuda")
         self.anchor_demon = torch.zeros((self.get_anchor.shape[0], 1), device="cuda")
 
         
@@ -659,7 +662,7 @@ class GaussianModel:
 
 
     # statis grad information to guide liftting. 统计一段时间内锚点的梯度信息累积，用于指导锚点的增长
-    def training_statis(self, viewspace_point_tensor, opacity, update_filter, offset_selection_mask, anchor_visible_mask):
+    def training_statis(self, viewspace_point_tensor, opacity, update_filter, offset_selection_mask, anchor_visible_mask, pixels):
         """
         统计一段时间内锚点的梯度信息累积，用于指导锚点的增长
         Args:
@@ -702,9 +705,10 @@ class GaussianModel:
         combined_mask[temp_mask] = update_filter
         
         # 只对mean2D XY方向上的梯度做正则化,按行来求二范数
-        grad_norm = torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
-        self.offset_gradient_accum[combined_mask] += grad_norm
+        grad_norm_pixels = torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True) * pixels[update_filter]
+        self.offset_gradient_accum[combined_mask] += grad_norm_pixels
         self.offset_denom[combined_mask] += 1
+        self.offset_denom_pixels[combined_mask] += pixels[update_filter]
 
         
 
@@ -889,9 +893,9 @@ class GaussianModel:
     # 锚点稠密化
     def adjust_anchor(self, check_interval=100, success_threshold=0.8, grad_threshold=0.0002, min_opacity=0.005):
         # # adding anchors
-        grads = self.offset_gradient_accum / self.offset_denom # [N*k, 1]
+        grads = self.offset_gradient_accum / self.offset_denom_pixels # [N*k, 1]
         grads[grads.isnan()] = 0.0
-        # 因为一个锚点下有offset个高斯点,所以这里算个二范数来代表该锚点的区块
+        # 因为一个锚点下有offset个高斯点,所以这里计算二范数来代表该锚点的区块
         grads_norm = torch.norm(grads, dim=-1)
         # 在K次优化中,某个offset高斯点要至少激活40%*K次才考虑稠密化 --- 表示剔除或稠密化的候选offset高斯点
         # 这里squeeze将竖排变为横排
@@ -906,6 +910,12 @@ class GaussianModel:
                                            dtype=torch.int32, 
                                            device=self.offset_denom.device)
         self.offset_denom = torch.cat([self.offset_denom, padding_offset_demon], dim=0)
+        
+        self.offset_denom_pixels[offset_mask] = 0
+        padding_offset_demon = torch.zeros([self.get_anchor.shape[0]*self.n_offsets - self.offset_denom_pixels.shape[0], 1],
+                                           dtype=torch.int32, 
+                                           device=self.offset_denom_pixels.device)
+        self.offset_denom_pixels = torch.cat([self.offset_denom_pixels, padding_offset_demon], dim=0)
 
         self.offset_gradient_accum[offset_mask] = 0
         padding_offset_gradient_accum = torch.zeros([self.get_anchor.shape[0]*self.n_offsets - self.offset_gradient_accum.shape[0], 1],
@@ -925,6 +935,11 @@ class GaussianModel:
         offset_denom = offset_denom.view([-1, 1])
         del self.offset_denom
         self.offset_denom = offset_denom
+       
+        offset_denom_pixels = self.offset_denom_pixels.view([-1, self.n_offsets])[~prune_mask]
+        offset_denom_pixels = offset_denom_pixels.view([-1, 1])
+        del self.offset_denom_pixels
+        self.offset_denom_pixels = offset_denom_pixels
 
         offset_gradient_accum = self.offset_gradient_accum.view([-1, self.n_offsets])[~prune_mask]
         offset_gradient_accum = offset_gradient_accum.view([-1, 1])

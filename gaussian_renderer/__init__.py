@@ -110,9 +110,9 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
     else:
         return xyz, color, opacity, scaling, rot
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, visible_mask=None, retain_grad=False):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, visible_mask=None, retain_grad=False, pixelgs_depth_scaled_gard=None):
     """
-    todo Render the scene. 
+    Render the scene. 
     Render the scene using Gaussian rendering technique.
 
     Args:
@@ -172,6 +172,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         tanfovy=tanfovy,
         bg=bg_color,
         scale_modifier=scaling_modifier,
+        depth_threshold=pixelgs_depth_scaled_gard,
         viewmatrix=viewpoint_camera.world_view_transform,
         projmatrix=viewpoint_camera.full_proj_transform,
         sh_degree=1,
@@ -183,7 +184,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
     
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
-    rendered_image, radii = rasterizer(
+    rendered_image, radii, pixels = rasterizer(
         means3D = xyz,
         means2D = screenspace_points,
         shs = None,
@@ -202,6 +203,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
                 "selection_mask": mask,
                 "neural_opacity": neural_opacity,
                 "scaling": scaling,
+                "pixels": pixels
                 }
     else:
         return {"render": rendered_image,
@@ -235,6 +237,7 @@ def prefilter_voxel(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch
         tanfovy=tanfovy,
         bg=bg_color,
         scale_modifier=scaling_modifier,
+        depth_threshold=None,
         viewmatrix=viewpoint_camera.world_view_transform,
         projmatrix=viewpoint_camera.full_proj_transform,
         sh_degree=1,

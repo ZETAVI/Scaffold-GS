@@ -22,7 +22,7 @@ result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE).stdout.decode()
 # x.split()[2] 将每一行按照空格分割，并取出第 3 个元素，这个元素是 GPU 的内存使用量。int() 函数将这个元素转换为整数。
 # np.argmin() 函数找出列表中最小元素的索引，也就是内存使用最少的 GPU 的编号
 # os.environ['CUDA_VISIBLE_DEVICES']=str(np.argmin([int(x.split()[2]) for x in result[:-1]]))
-os.environ['CUDA_VISIBLE_DEVICES']="1"
+# os.environ['CUDA_VISIBLE_DEVICES']="1"
 
 os.system('echo $CUDA_VISIBLE_DEVICES')
 
@@ -48,7 +48,7 @@ from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
 import uuid
 from tqdm import tqdm
-from utils.image_utils import psnr
+from utils.image_utils import psnr, error_map
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 
@@ -186,7 +186,7 @@ def training(dataset, opt, pipe, dataset_name, testing_iterations, saving_iterat
         # 是否继续更新高斯点，即是否继续计算梯度
         retain_grad = (iteration < opt.update_until and iteration >= 0)
         # 渲染 得到渲染结果包
-        render_pkg = render(viewpoint_cam, gaussians, pipe, background, visible_mask=voxel_visible_mask, retain_grad=retain_grad)
+        render_pkg = render(viewpoint_cam, gaussians, pipe, background, visible_mask=voxel_visible_mask, retain_grad=retain_grad, pixelgs_depth_scaled_gard=opt.pixelgs_depth_threshold*scene.cameras_extent)
 
         # visibility_filter是所有被激活anchor下激活的offset在cuda渲染时的可见性, visible_mask是锚点的可见性(还不是锚点内特定offset的激活)
         # radii与scaling有关,但radii是2D投影后scaling的长边的1.5倍(考虑正太分布的三个标准差内 99.73%)
@@ -227,7 +227,7 @@ def training(dataset, opt, pipe, dataset_name, testing_iterations, saving_iterat
             # densification 在500 - 15000 迭代之间累积各锚点的梯度，并从1500开始每ope.update_interval对锚点进行稠密化
             if iteration < opt.update_until and iteration > opt.start_stat:
                 # 用来对每次优化迭代的梯度做累积的,其中包括了更新次数的记录
-                gaussians.training_statis(viewspace_point_tensor, opacity, visibility_filter, offset_selection_mask, voxel_visible_mask)
+                gaussians.training_statis(viewspace_point_tensor, opacity, visibility_filter, offset_selection_mask, voxel_visible_mask, render_pkg["pixels"])
 
                 # densification
                 if iteration > opt.update_from and iteration % opt.update_interval == 0:
@@ -333,9 +333,9 @@ def training_report(tb_writer, dataset_name, iteration, Ll1, loss, l1_loss, elap
     - None
     """
     if tb_writer:
-        tb_writer.add_scalar(f'{dataset_name}/train_loss_patches/l1_loss', Ll1.item(), iteration)
-        tb_writer.add_scalar(f'{dataset_name}/train_loss_patches/total_loss', loss.item(), iteration)
-        tb_writer.add_scalar(f'{dataset_name}/iter_time', elapsed, iteration)
+        tb_writer.add_scalar(f'train_loss_patches/l1_loss', Ll1.item(), iteration)
+        tb_writer.add_scalar(f'train_loss_patches/total_loss', loss.item(), iteration)
+        tb_writer.add_scalar(f'iter_time', elapsed, iteration)
 
 
     if wandb is not None:
@@ -362,16 +362,18 @@ def training_report(tb_writer, dataset_name, iteration, Ll1, loss, l1_loss, elap
                     voxel_visible_mask = prefilter_voxel(viewpoint, scene.gaussians, *renderArgs)
                     image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs, visible_mask=voxel_visible_mask)["render"], 0.0, 1.0)
                     gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
+                    error_image = error_map(image, gt_image)
                     if tb_writer and (idx < 30):
-                        tb_writer.add_images(f'{dataset_name}/'+config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)
-                        tb_writer.add_images(f'{dataset_name}/'+config['name'] + "_view_{}/errormap".format(viewpoint.image_name), (gt_image[None]-image[None]).abs(), global_step=iteration)
+                        tb_writer.add_images(config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)
+                        tb_writer.add_images(config['name'] + "_view_{}/errormap".format(viewpoint.image_name), (gt_image[None]-image[None]).abs(), global_step=iteration)
+                        tb_writer.add_images(config['name'] + "_view_{}/errormap2".format(viewpoint.image_name), error_image[None], global_step=iteration)
 
                         if wandb:
                             render_image_list.append(image[None])
                             errormap_list.append((gt_image[None]-image[None]).abs())
 
                         if iteration == testing_iterations[0]:
-                            tb_writer.add_images(f'{dataset_name}/'+config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
+                            tb_writer.add_images(config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
                             if wandb:
                                 gt_image_list.append(gt_image[None])
 
@@ -386,14 +388,14 @@ def training_report(tb_writer, dataset_name, iteration, Ll1, loss, l1_loss, elap
 
 
                 if tb_writer:
-                    tb_writer.add_scalar(f'{dataset_name}/'+config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
-                    tb_writer.add_scalar(f'{dataset_name}/'+config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
+                    tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
+                    tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
                 if wandb is not None:
                     wandb.log({f"{config['name']}_loss_viewpoint_l1_loss":l1_test, f"{config['name']}_PSNR":psnr_test})
 
         if tb_writer:
-            # tb_writer.add_histogram(f'{dataset_name}/'+"scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
-            tb_writer.add_scalar(f'{dataset_name}/'+'total_points', scene.gaussians.get_anchor.shape[0], iteration)
+            # tb_writer.add_histogram("scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
+            tb_writer.add_scalar('total_points', scene.gaussians.get_anchor.shape[0], iteration)
         torch.cuda.empty_cache()
 
         scene.gaussians.train()
@@ -606,9 +608,9 @@ if __name__ == "__main__":
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[3_000, 7_000, 30_000])
     # parser.add_argument("--save_iterations", nargs="+", type=int, default=[3_000, 7_000, 30_000])
     # nargs="+" 表示这个选项的值可以是一个或多个参数。例如，用户可以在命令行中输入 --test_iterations 10000 20000 30000，那么 args.test_iterations 就会是一个列表 [10000, 20000, 30000]。
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[30_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1]+[500*(i) for i in range(61)])
     # save_iterations 是一个列表，里面包含了需要保存模型的时刻。默认情况下，只保存最后一次迭代的模型。
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[30_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2000*(i) for i in range(61)])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)

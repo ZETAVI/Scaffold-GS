@@ -182,6 +182,9 @@ class OptimizationParams(ParamGroup):
         self.success_threshold = 0.8
         self.densify_grad_threshold = 0.0002
 
+        # Pixelgs
+        self.pixelgs_depth_threshold = 0.37
+
         super().__init__(parser, "Optimization Parameters")
 
 def get_combined_args(parser : ArgumentParser):

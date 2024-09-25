@@ -49,6 +49,7 @@ namespace CudaRasterizer
 			const float tan_fovx, float tan_fovy,
 			const bool prefiltered,
 			float* out_color,
+			float* pixels,
 			int* radii = nullptr,
 			bool debug = false);
 
@@ -102,6 +103,7 @@ namespace CudaRasterizer
 			float* dL_dsh,
 			float* dL_dscale,
 			float* dL_drot,
+			float* depth,
 			bool debug);
 	};
 };
