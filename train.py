@@ -394,7 +394,7 @@ def training_report(tb_writer, dataset_name, iteration, Ll1, loss, l1_loss, elap
                     wandb.log({f"{config['name']}_loss_viewpoint_l1_loss":l1_test, f"{config['name']}_PSNR":psnr_test})
 
         if tb_writer:
-            # tb_writer.add_histogram("scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
+            # tb_writer.add_histogram(f'{dataset_name}/'+"scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
             tb_writer.add_scalar('total_points', scene.gaussians.get_anchor.shape[0], iteration)
         torch.cuda.empty_cache()
 
@@ -608,9 +608,9 @@ if __name__ == "__main__":
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[3_000, 7_000, 30_000])
     # parser.add_argument("--save_iterations", nargs="+", type=int, default=[3_000, 7_000, 30_000])
     # nargs="+" 表示这个选项的值可以是一个或多个参数。例如，用户可以在命令行中输入 --test_iterations 10000 20000 30000，那么 args.test_iterations 就会是一个列表 [10000, 20000, 30000]。
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1]+[500*(i) for i in range(61)])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1]+[500*(i) for i in range(1,61,1)])
     # save_iterations 是一个列表，里面包含了需要保存模型的时刻。默认情况下，只保存最后一次迭代的模型。
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2000*(i) for i in range(61)])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2000*(i) for i in range(1,61,1)])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
