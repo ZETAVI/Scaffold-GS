@@ -192,6 +192,18 @@ def training(dataset, opt, pipe, dataset_name, testing_iterations, saving_iterat
         # radii与scaling有关,但radii是2D投影后scaling的长边的1.5倍(考虑正太分布的三个标准差内 99.73%)
         image, viewspace_point_tensor, visibility_filter, offset_selection_mask, radii, scaling, opacity = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["selection_mask"], render_pkg["radii"], render_pkg["scaling"], render_pkg["neural_opacity"]
 
+        # # 加入erackL
+        # scales_2 = scaling ** 2
+        # S = torch.sum(scales_2, dim=1, keepdim=True) 
+        # # 计算尺度的分布
+        # q = scales_2 / S
+        # # 计算尺度的熵
+        # entropy = torch.exp(-torch.sum(q * torch.log(q + 1e-5), dim=1))
+        # Lerank = torch.max(-torch.log(entropy-1+1e-5), torch.zeros_like(entropy))
+        # # 加入 s_3 项 (s_3 是最小的尺度) 先不加入
+        # s3 = torch.min(scaling, dim=1).values  # 计算每个高斯点的最小尺度 s3
+        # Lerank = torch.sum(Lerank) 
+
         # .cuda() 是 PyTorch 中的一个方法，用于将 Tensor 对象移动到 GPU 上进行计算。
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
@@ -199,6 +211,7 @@ def training(dataset, opt, pipe, dataset_name, testing_iterations, saving_iterat
         ssim_loss = (1.0 - ssim(image, gt_image))
         # 对高斯的尺度正则化，取当前高斯点集中每个高斯点尺度(按行)的乘积的均值
         scaling_reg = scaling.prod(dim=1).mean()
+        # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * ssim_loss + 0.01*scaling_reg + 0.01 * Lerank
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * ssim_loss + 0.01*scaling_reg
 
         # 自动计算损失函数关于模型参数的梯度,这些梯度会被存储在对应的参数.grad属性中
